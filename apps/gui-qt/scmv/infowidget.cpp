@@ -47,7 +47,7 @@ void createConfigureAndAddTreeItem(QTreeWidgetItem* rootItem, const QString& tit
 
 	QTreeWidgetItem* item = new QTreeWidgetItem(rootItem, QStringList(title));
 	item->setText(column, text);
-	item->setBackgroundColor(column, backgroundColor);
+	item->setBackground(column, backgroundColor);
 }
 
 
@@ -612,9 +612,9 @@ void StationInfoWidget::resizeColumnsToContent() {
 
 	treeWidget()->resizeColumnToContents(0);
 
-	treeWidget()->setItemExpanded(_stationItem, isStationItemExpanded);
-	treeWidget()->setItemExpanded(_amplitudeItem, isAmplitudeItemExpanded);
-	treeWidget()->setItemExpanded(_qcItem, isQCItemExpanded);
+	_stationItem->setExpanded(isStationItemExpanded);
+	_amplitudeItem->setExpanded(isAmplitudeItemExpanded);
+	_qcItem->setExpanded(isQCItemExpanded);
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 

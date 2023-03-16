@@ -3,6 +3,9 @@
 	<module name="scorgls" category="Utilities">
 		<description>List origin IDs from database.</description>
 		<command-line>
+		<synopsis>
+		scorgls [options]
+		</synopsis>
 			<group name="Generic">
 				<optionReference>generic#help</optionReference>
 				<optionReference>generic#version</optionReference>
@@ -37,14 +40,22 @@
 			<group name="Origins">
 				<option long-flag="begin" argument="time">
 					<description>
-					Specify the lower bound of the time interval. Format is
+					The lower bound of the time interval. Format:
 					&quot;2012-01-01 00:00:00&quot;.
 					</description>
 				</option>
 				<option long-flag="end" argument="time">
 					<description>
-					Specify the upper bound of the time interval. Format is
+					The upper bound of the time interval. Format:
 					&quot;2012-01-01 00:00:00&quot;.
+					</description>
+				</option>
+			</group>
+
+			<group name="Output">
+				<option long-flag="delimiter" flag="D" argument="string">
+					<description>
+					The delimiter of the resulting origin IDs.
 					</description>
 				</option>
 			</group>

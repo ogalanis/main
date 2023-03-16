@@ -31,7 +31,7 @@
 
 #include <seiscomp/processing/amplitudeprocessor.h>
 
-#include <boost/bind.hpp>
+#include <functional>
 #include <iomanip>
 
 
@@ -99,7 +99,7 @@ AmpTool::AmpTool(int argc, char **argv) : StreamApplication(argc, argv) {
 	_amplitudeTypes.insert("mb");
 	_amplitudeTypes.insert("mB");
 
-	_cache.setPopCallback(boost::bind(&AmpTool::removedFromCache, this, _1));
+	_cache.setPopCallback(bind(&AmpTool::removedFromCache, this, placeholders::_1));
 
 	_errorChannel = NULL;
 	_errorOutput = NULL;
@@ -258,7 +258,7 @@ bool AmpTool::init() {
 	SEISCOMP_INFO("\nAmplitudes to calculate:\n%s", logAmplTypes.c_str());
 
 	_timer.setTimeout(1);
-	_timer.setCallback(boost::bind(&AmpTool::handleTimeout, this));
+	_timer.setCallback(bind(&AmpTool::handleTimeout, this));
 
 	return true;
 }
@@ -395,7 +395,7 @@ bool AmpTool::run() {
 					dbAmps[amp->type()] = amp;
 					proc->setTrigger(pick->time().value());
 					proc->setReferencingPickID(pick->publicID());
-					proc->setPublishFunction(boost::bind(&AmpTool::storeLocalAmplitude, this, _1, _2));
+					proc->setPublishFunction(bind(&AmpTool::storeLocalAmplitude, this, placeholders::_1, placeholders::_2));
 					_report << "     + Data" << std::endl;
 					addProcessor(proc.get(), NULL, pick.get(), None, None, None);
 				}
@@ -783,7 +783,7 @@ void AmpTool::process(Origin *origin) {
 				continue;
 			}
 
-			proc->setPublishFunction(boost::bind(&AmpTool::emitAmplitude, this, _1, _2));
+			proc->setPublishFunction(bind(&AmpTool::emitAmplitude, this, placeholders::_1, placeholders::_2));
 		}
 	}
 
@@ -807,7 +807,7 @@ void AmpTool::process(Origin *origin) {
 		        << ", " << req.timeWindow.endTime().toString("%F %T") << std::endl;
 	}
 
-	SEISCOMP_INFO("set stream timeout to 30 seconds");
+	SEISCOMP_INFO("Set stream timeout to %f seconds", _initialAcquisitionTimeout);
 	_acquisitionTimeout = _initialAcquisitionTimeout;
 	_firstRecord = true;
 
@@ -1312,7 +1312,8 @@ void AmpTool::storeLocalAmplitude(const Seiscomp::Processing::AmplitudeProcessor
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 bool AmpTool::storeRecord(Record *rec) {
 	if ( _firstRecord ) {
-		SEISCOMP_INFO("Data request: got first record, set timeout to 2 seconds");
+		SEISCOMP_INFO("Data request: got first record, set timeout to %f seconds",
+		              _runningAcquisitionTimeout);
 		_noDataTimer.restart();
 		_acquisitionTimeout = _runningAcquisitionTimeout;
 		_firstRecord = false;

@@ -263,6 +263,8 @@ MainFrame::MainFrame() {
 
 	_messageView = NULL;
 
+	_ui.menuSettings->addAction(_actionShowSettings);
+
 	connect(SCApp, SIGNAL(changedConnection()),
 	        this, SLOT(onConnectionChanged()));
 
@@ -394,8 +396,8 @@ void MainFrame::clearStatistics() {
 
 	for ( int i = 0; i < _ui.treeStats->topLevelItemCount(); ++i )
 		for ( int j = 0; j < _ui.treeStats->topLevelItem(i)->columnCount(); ++j ) {
-			_ui.treeStats->topLevelItem(i)->setBackgroundColor(j, QColor(128,128,128));
-			_ui.treeStats->topLevelItem(i)->setTextColor(j, Qt::white);
+			_ui.treeStats->topLevelItem(i)->setBackground(j, QColor(128,128,128));
+			_ui.treeStats->topLevelItem(i)->setForeground(j, Qt::white);
 		}
 
 	_traceWidget->clear();

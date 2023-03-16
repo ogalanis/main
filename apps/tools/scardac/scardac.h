@@ -29,6 +29,7 @@
 #include <seiscomp/datamodel/datasegment.h>
 #include <seiscomp/datamodel/databasearchive.h>
 
+#include <thread>
 #include <string>
 
 namespace Seiscomp {
@@ -145,11 +146,16 @@ class SCARDAC : public Client::Application {
 		// Thread safe queue of extends to process
 		Client::ThreadedQueue<WorkQueueItem> _workQueue;
 
-		typedef std::vector<boost::thread*> WorkerList;
+		typedef std::vector<std::thread*> WorkerList;
 		WorkerList                           _worker;
 
 	private:
 		friend class Worker;
+
+		/**
+		 * @brief print usage information
+		 */
+		void printUsage() const override;
 };
 
 } // ns DataAvailability

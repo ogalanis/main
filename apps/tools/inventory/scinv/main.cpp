@@ -458,38 +458,46 @@ class InventoryManager : public Client::Application,
 			commandline().addOption("Manager", "output,o",
 			                        "Output file.",
 			                        &_output);
-			commandline().addOption("Manager", "level",
-			                        "Information level (net, sta, cha or resp) used by ls.",
-			                        &_level);
-			commandline().addOption("Manager", "compact",
-			                        "Enabled compact output for ls.");
 			commandline().addOption("Manager", "no-purge-keys",
-			                        "Do not delete key files if a station does not exist in inventory");
+			                        "Do not delete key files if a station does not exist in inventory.");
 			commandline().addOption("Manager", "purge-keys",
-			                        "(default) Delete key files if a station does not exist in inventory");
-			commandline().addGroup("Merge");
-			commandline().addOption("Merge", "strip",
-			                        "Remove unreferenced objects (dataloggers, "
-			                        "sensors, ...).");
+			                        "(default) Delete key files if a station does not exist in inventory.");
+
 			commandline().addGroup("Check");
-		    commandline().addOption("Check", "distance",
-		                            "Maximum allowed distance between station "
-		                            "and sensor location in km. "
-		                            "Larger distances will be reported.",
-		                            &_maxDistance);
-		    commandline().addOption("Check", "max-elevation-difference",
-		                            "Maximum allowed difference in elevation "
-		                            "between station and sensorlocation in m. "
-		                            "Larger diferences will be reported.",
-		                            &_maxElevationDifference);
+			commandline().addOption("Check", "distance",
+			                        "Maximum allowed distance between station "
+			                        "and sensor location in km. "
+			                        "Larger distances will be reported.",
+			                        &_maxDistance);
+			commandline().addOption("Check", "max-elevation-difference",
+			                        "Maximum allowed difference in elevation "
+			                        "between station and sensor location in meters. "
+			                        "Larger differences will be reported.",
+			                        &_maxElevationDifference);
 			commandline().addOption("Check", "max-sensor-depth",
 			                        "Maximum allowed depth of channel (sensor)."
 			                        " This is the depth of the sensor below the"
 			                        " surface in m. Larger depths will be reported.",
 			                        &_maxDepth);
+
+			commandline().addGroup("List");
+			commandline().addOption("List", "compact",
+			                       "Enable compact output for ls.");
+			commandline().addOption("List", "level",
+			                        "Information level (net, sta, cha or resp) used by ls.",
+			                        &_level);
+			commandline().addOption("List", "nslc",
+			                        "Enable NSLC output for ls as NET.STA.LOC.CHA. "
+			                        "The option implies level = cha.");
+
+			commandline().addGroup("Merge");
+			commandline().addOption("Merge", "strip",
+			                        "Remove unreferenced objects (dataloggers, "
+			                        "sensors, ...).");
+
 			commandline().addGroup("Sync");
 			commandline().addOption("Sync", "create-notifier",
-			                        "If an output file is given then all "
+			                        "If an output file is given, then all "
 			                        "notifiers will be saved and not the "
 			                        "result set itself.");
 			commandline().addOption("Sync", "no-keys",
@@ -555,7 +563,9 @@ class InventoryManager : public Client::Application,
 
 
 		void printUsage() const {
-			cout << "Usage: " << name() << " [COMMAND] [FILES] [OPTIONS]" << endl;
+			cout << "Usage: " << endl << "  " << name() << " [COMMAND] [FILES] [OPTIONS]"
+			     << endl;
+			cout << endl << "Read, check, merge, synchronize inventories, create key files, list content" << endl;
 			cout << endl << "Commands:" << endl;
 			cout << "  sync  Synchronises an applications inventory with a given source" << endl
 			     << "        given as file(s). The applications inventory is either read from the" << endl
@@ -578,6 +588,19 @@ class InventoryManager : public Client::Application,
 			cout << "        all files in filebase are merged and checked." << endl;
 
 			Client::Application::printUsage();
+
+			cout << "Examples:" << endl;
+			cout << "Check inventory in XML file with custom distance control" << endl;
+			cout << "  scinv check --distance 0.1 inventory.xml" << endl;
+			cout << endl << "Create key files from inventory files in SeisComP inventory directory" << endl;
+			cout << "  scinv keys" << endl;
+			cout << endl << "Create key files and synchronize inventory with the SeisComP database" << endl;
+			cout << "  scinv keys" << endl;
+			cout << endl << "Merge inventory in multiple XML files into one file" << endl;
+			cout << "  scinv merge inventory1.xml inventory2.xml -o inventory.xml" << endl;
+			cout << endl << "List the content of inventory in one XML file at channel level" << endl;
+			cout << "  scinv ls --level cha inventory.xml" << endl;
+			cout << endl;
 		}
 
 
@@ -1568,6 +1591,13 @@ class InventoryManager : public Client::Application,
 			cerr << "done" << endl;
 
 			bool compact = commandline().hasOption("compact");
+			bool nslc = commandline().hasOption("nslc");
+			if ( nslc ) {
+
+			    // for nslc full channel information are required but no respones
+				_level = "cha";
+			}
+
 			int level = 2;
 			if ( _level == "net" )
 				level = 0;
@@ -1587,16 +1617,20 @@ class InventoryManager : public Client::Application,
 
 			for ( size_t n = 0; n < nets.size(); ++n ) {
 				DataModel::Network *net = nets[n];
-				if ( compact )
-					cout << net->code() << "\t" << epochToStr(net) << endl;
-				else {
-					cout << "  network " << net->code();
-					if ( !net->description().empty() ) {
-						cout << setfill(' ') << setw(8-net->code().size()) << ' ';
-						cout << " " << net->description();
+
+				if ( !nslc ) {
+					if ( compact ) {
+						cout << net->code() << "\t" << epochToStr(net) << endl;
 					}
-					cout << endl;
-					cout << "    epoch " << epochToStr(net) << endl;
+					else {
+						cout << "  network " << net->code();
+						if ( !net->description().empty() ) {
+							cout << setfill(' ') << setw(8-net->code().size()) << ' ';
+							cout << " " << net->description();
+						}
+						cout << endl;
+						cout << "    epoch " << epochToStr(net) << endl;
+					}
 				}
 
 				std::vector<DataModel::Station*> stas;
@@ -1610,46 +1644,56 @@ class InventoryManager : public Client::Application,
 
 				for ( size_t s = 0; s < stas.size(); ++s ) {
 					DataModel::Station *sta = stas[s];
-					if ( compact )
-						cout << " " << sta->code() << "\t" << epochToStr(sta) << endl;
-					else {
-						cout << "    station " << sta->code();
-						if ( !sta->description().empty() ) {
-							cout << setfill(' ') << setw(6-sta->code().size()) << ' ';
-							cout << " " << sta->description();
+					if ( !nslc ) {
+						if ( compact ) {
+							cout << " " << sta->code() << "\t" << epochToStr(sta) << endl;
 						}
-						cout << endl;
-						cout << "      epoch " << epochToStr(sta) << endl;
+						else {
+							cout << "    station " << sta->code();
+							if ( !sta->description().empty() ) {
+								cout << setfill(' ') << setw(6-sta->code().size()) << ' ';
+								cout << " " << sta->description();
+							}
+							cout << endl;
+							cout << "      epoch " << epochToStr(sta) << endl;
+						}
 					}
 
 					std::vector<DataModel::SensorLocation*> locs;
 
 					if ( level > 1 ) {
-						for ( size_t l = 0; l < sta->sensorLocationCount(); ++l )
+						for ( size_t l = 0; l < sta->sensorLocationCount(); ++l ) {
 							locs.push_back(sta->sensorLocation(l));
+						}
 					}
 
 					sort(locs.begin(), locs.end(), lessID<DataModel::SensorLocation>);
 
 					for ( size_t l = 0; l < locs.size(); ++l ) {
 						DataModel::SensorLocation *loc = locs[l];
-						if ( compact ) {
-							cout << "  ";
-							if ( loc->code().empty() )
-								cout << "__";
-							else
-								cout << loc->code();
-							cout << "\t" << epochToStr(loc) << endl;
-						}
-						else {
-							cout << "      location ";
-							if ( loc->code().empty() )
-								cout << "__";
-							else
-								cout << loc->code();
-							cout << endl;
+						if ( !nslc ) {
+							if ( compact ) {
+								cout << "  ";
+								if ( loc->code().empty() ) {
+									cout << "__";
+								}
+								else {
+									cout << loc->code();
+								}
+								cout << "\t" << epochToStr(loc) << endl;
+							}
+							else {
+								cout << "      location ";
+								if ( loc->code().empty() ) {
+									cout << "__";
+								}
+								else {
+									cout << loc->code();
+								}
+								cout << endl;
 
-							cout << "        epoch " << epochToStr(loc) << endl;
+								cout << "        epoch " << epochToStr(loc) << endl;
+							}
 						}
 
 						std::vector<DataModel::Stream*> streams;
@@ -1661,8 +1705,19 @@ class InventoryManager : public Client::Application,
 
 						for ( size_t s = 0; s < streams.size(); ++s ) {
 							DataModel::Stream *str = streams[s];
-							if ( compact )
+							if ( ( nslc ) && ( _level == "cha" ) ) {
+								cout << net->code() << "." << sta->code() << "."
+								     << loc->code() << "." << str->code()
+								     << "\t" << epochToStr(str) << endl;
+							}
+							else if ( compact ) {
 								cout << "   " << str->code() << "\t" << epochToStr(str) << endl;
+							}
+							else if ( nslc ) {
+								cout << net->code() << "." << sta->code() << "."
+								     << loc->code() << "." << str->code() << " "
+								     << epochToStr(str) << endl;
+							}
 							else {
 								cout << "        channel ";
 								cout << str->code() << endl;

@@ -9,6 +9,13 @@ scinv is used by :file:`etc/init/scinv.py` to synchronise the inventory from
 
    seiscomp update-config inventory
 
+.. hint::
+
+   Inventory files in :term:`SCML` format may be generated or modified by
+   :cite:t:`smp` or :ref:`invextr`. For conversion from FDSN station XML and
+   dataless SEED volume to :term:`SCML` use :ref:`fdsnxml2inv` and
+   :ref:`dlsv2inv`, respectively.
+
 
 Commands
 ========
@@ -78,7 +85,7 @@ synchronization.
 
    scinv merge net1.xml net2.xml -o inv.xml
 
-.. note ::
+.. note::
 
    Merging inventory XML files is also supported by :ref:`scxmlmerge` but
    without the full :ref:`consistency checks <scinv_check>`.
@@ -165,7 +172,7 @@ an XML file or the complete inventory pool.
              epoch 2010-03-25
 
 The default level of information printed is *chan*. Available levels are *net*,
-*sta*, *chan* and *resp*. The output level is controlled by ``--level``.
+*sta*, *chan* and *resp*. The output level is controlled by :option:`--level``.
 
 For checking the available networks and stations in the inventory pool, calling
 
@@ -174,6 +181,19 @@ For checking the available networks and stations in the inventory pool, calling
    scinv ls --level sta
 
 is enough.
+
+.. hint::
+
+   Stream lists in NSLC format (NET.STA.LOC.CHA) may be generated when combining
+   with :option:`--nslc`. Such lists can be used as input for filtering
+   waveforms, e.g., to :ref:`scmssort` or :ref:`scart`.
+
+   .. code-block:: sh
+
+      $ scinv ls --nslc inventory.xml
+
+        IU.WVT.00.BHZ 2017-11-16
+        IU.XMAS.00.BH1 2018-07-06 20:00:00
 
 
 .. _scinv_check:
@@ -202,7 +222,7 @@ When inconsistencies or other relevant information are found, alerts are printed
 - **R**: Unresolvable, user should check if an action is required,
 - **?**: Question.
 
-.. note ::
+.. note::
 
    * Default test tolerances are adopted from typical values for global
      networks. Consider adjusting :confval:`check.maxDistance`,
@@ -261,6 +281,7 @@ results.
                  , epoch outside network            , C,
                  , start time after end time        , C,
                  , missing gain value               , W, empty value is handled by SeisComP inventory reader
+                 , gain value = 0                   , W,
                  , missing gain unit                , W, empty value is handled by SeisComP inventory reader
                  , missing gain frequency           ,  , empty value is handled by SeisComP inventory reader
                  , missing sampling rate            ,  , empty value is handled by SeisComP inventory reader

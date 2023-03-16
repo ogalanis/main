@@ -15,6 +15,7 @@
 
 import os
 import sys
+import re
 import subprocess
 import traceback
 import seiscomp.core, seiscomp.client, seiscomp.datamodel, seiscomp.math
@@ -61,6 +62,9 @@ class ObjectAlert(seiscomp.client.Application):
         self._oldEvents = []
         self._agencyIDs = []
         self._phaseHints = []
+        self._phaseStreams = []
+        self._phaseNumber = 1
+        self._phaseInterval = 1
 
     def createCommandLineDescription(self):
         self.commandline().addOption("Generic", "first-new",
@@ -122,6 +126,39 @@ class ObjectAlert(seiscomp.client.Application):
                     self._phaseHints.append(item)
         except:
             pass
+
+        self._phaseStreams = []
+        try:
+            phaseStreams = self.configGetStrings("constraints.phaseStreams")
+            for item in phaseStreams:
+                rule = item.strip()
+                # rule is NET.STA.LOC.CHA and the special charactes ? * | ( ) are allowed
+                if not re.fullmatch(r'[A-Z|a-z|0-9|\?|\*|\||\(|\)|\.]+', rule):
+                    seiscomp.logging.error("Wrong stream ID format in `constraints.phaseStreams`: %s" % item)
+                    return False
+                # convert rule to a valid regular expression
+                rule = re.sub(r'\.',  r'\.', rule)
+                rule = re.sub(r'\?',  '.'  , rule)
+                rule = re.sub(r'\*' , '.*' , rule)
+                if rule not in self._phaseStreams:
+                    self._phaseStreams.append(rule)
+        except:
+            pass
+
+        try:
+            self._phaseNumber = self.configGetInt("constraints.phaseNumber")
+        except:
+            pass
+
+        try:
+            self._phaseInterval = self.configGetInt("constraints.phaseInterval")
+        except:
+            pass
+
+        if self._phaseNumber > 1:
+            self._pickCache = seiscomp.datamodel.PublicObjectTimeSpanBuffer()
+            self._pickCache.setTimeSpan(seiscomp.core.TimeSpan(self._phaseInterval))
+            self.enableTimer(1)
 
         try:
             self._eventDescriptionPattern = self.configGetString("poi.message")
@@ -286,6 +323,11 @@ class ObjectAlert(seiscomp.client.Application):
         else:
             seiscomp.logging.info(" + phase hints: no filter is applied")
 
+        if " ".join(self._phaseStreams):
+            seiscomp.logging.info(" + phase stream ID filter for picks: '%s'" % (" ".join(self._phaseStreams)))
+        else:
+            seiscomp.logging.info(" + phase stream ID: no filter is applied") 
+
         return True
 
     def run(self):
@@ -306,40 +348,45 @@ class ObjectAlert(seiscomp.client.Application):
             return False
 
 
-    def runPickScript(self, pickObject):
+    def runPickScript(self, pickObjectList):
         if not self._pickScript:
             return
 
-        # parse values
-        try:
-            net = pickObject.waveformID().networkCode()
-        except:
-            net = "unknown"
-        try:
-            sta = pickObject.waveformID().stationCode()
-        except:
-            sta = "unknown"
-        pickID = pickObject.publicID()
-        try:
-            phaseHint =  pickObject.phaseHint().code()
-        except:
-            phaseHint = "unknown"
+        for pickObject in pickObjectList:
+            # parse values
+            try:
+                net = pickObject.waveformID().networkCode()
+            except:
+                net = "unknown"
+            try:
+                sta = pickObject.waveformID().stationCode()
+            except:
+                sta = "unknown"
+            pickID = pickObject.publicID()
+            try:
+                phaseHint =  pickObject.phaseHint().code()
+            except:
+                phaseHint = "unknown"
 
-        print(net, sta, pickID, phaseHint)
+            print(net, sta, pickID, phaseHint)
 
-        if self._pickProc is not None:
-            if self._pickProc.poll() is None:
-                seiscomp.logging.warning(
-                    "Pick script still in progress -> skipping message")
-                return
-        try:
-            self._pickProc = subprocess.Popen(
-                [self._pickScript, net, sta, pickID, phaseHint])
-            seiscomp.logging.info(
-                "Started pick script with pid %d" % self._pickProc.pid)
-        except:
-            seiscomp.logging.error(
-                "Failed to start pick script '%s'" % self._pickScript)
+            if self._pickProc is not None:
+                if self._pickProc.poll() is None:
+                    seiscomp.logging.info(
+                            "Pick script still in progress -> wait one second")
+                    self._pickProc.wait(1)
+                if self._pickProc.poll() is None:
+                    seiscomp.logging.warning(
+                        "Pick script still in progress -> skipping message")
+                    return
+            try:
+                self._pickProc = subprocess.Popen(
+                    [self._pickScript, net, sta, pickID, phaseHint])
+                seiscomp.logging.info(
+                    "Started pick script with pid %d" % self._pickProc.pid)
+            except:
+                seiscomp.logging.error(
+                    "Failed to start pick script '%s'" % self._pickScript)
 
     def runAmpScript(self, ampObject):
         if not self._ampScript:
@@ -419,6 +466,21 @@ class ObjectAlert(seiscomp.client.Application):
                 seiscomp.logging.debug("got new pick '%s'" % obj.publicID())
                 agencyID = obj.creationInfo().agencyID()
                 phaseHint = obj.phaseHint().code()
+                if  self._phaseStreams:
+                    waveformID = "%s.%s.%s.%s" % (
+                            obj.waveformID().networkCode(), obj.waveformID().stationCode(), 
+                            obj.waveformID().locationCode(), obj.waveformID().channelCode())
+                    matched = False
+                    for rule in self._phaseStreams:
+                        if re.fullmatch(rule, waveformID):
+                            matched = True
+                            break
+                    if not matched:
+                        seiscomp.logging.debug(
+                                " + stream ID %s does not match constraints.phaseStreams rules"
+                                 % (waveformID))
+                        return
+ 
                 if not self._agencyIDs or agencyID in self._agencyIDs:
                     if not self._phaseHints or phaseHint in self._phaseHints:
                         self.notifyPick(obj)
@@ -428,6 +490,7 @@ class ObjectAlert(seiscomp.client.Application):
                 else:
                     seiscomp.logging.debug(" + agencyID %s does not match '%s'"
                                            % (agencyID, self._agencyIDs))
+                return
 
             # amplitude
             obj = seiscomp.datamodel.Amplitude.Cast(object)
@@ -436,6 +499,7 @@ class ObjectAlert(seiscomp.client.Application):
                     seiscomp.logging.debug("got new %s amplitude '%s'" % (
                         self._ampType, obj.publicID()))
                     self.notifyAmplitude(obj)
+                return
 
             # origin
             obj = seiscomp.datamodel.Origin.Cast(object)
@@ -469,6 +533,7 @@ class ObjectAlert(seiscomp.client.Application):
                 seiscomp.logging.debug("got new event '%s'" % obj.publicID())
                 if not self._agencyIDs or agencyID in self._agencyIDs:
                     self.notifyEvent(obj, True)
+                return
         except:
             info = traceback.format_exception(*sys.exc_info())
             for i in info:
@@ -489,8 +554,25 @@ class ObjectAlert(seiscomp.client.Application):
             for i in info:
                 sys.stderr.write(i)
 
+    def handleTimeout(self):
+        self.checkEnoughPicks()
+
+    def checkEnoughPicks(self):
+        if self._pickCache.size() >= self._phaseNumber:
+            # wait until self._phaseInterval has elapsed before calling the
+            # script (more picks might come)
+            timeWindowLength = (seiscomp.core.Time.GMT() - self._pickCache.oldest()).length()
+            if timeWindowLength >= self._phaseInterval:
+                picks = [seiscomp.datamodel.Pick.Cast(o) for o in self._pickCache]
+                self.runPickScript(picks)
+                self._pickCache.clear()
+
     def notifyPick(self, pick):
-        self.runPickScript(pick)
+        if self._phaseNumber <= 1:
+            self.runPickScript([pick])
+        else:
+            self.checkEnoughPicks()
+            self._pickCache.feed(pick)
 
     def notifyAmplitude(self, amp):
         self.runAmpScript(amp)

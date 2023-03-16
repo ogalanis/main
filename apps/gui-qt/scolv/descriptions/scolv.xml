@@ -227,21 +227,21 @@
 					</parameter>
 				</group>
 				<group name="commit">
-					<parameter name="forceEventAssociation" type="boolean" default="true">
+					<parameter name="forceEventAssociation" type="boolean" default="false">
 						<description>
 						Activates the button &quot;Force association with event&quot; when
 						committing with additional options. This is just the default
 						setting and can be changed manually when the dialog pops up.
 						</description>
 					</parameter>
-					<parameter name="fixOrigin" type="boolean" default="true">
+					<parameter name="fixOrigin" type="boolean" default="false">
 						<description>
 						Activates the button &quot;Fix this origin as preferred solution&quot; when
 						committing with additional options. This is just the default
 						setting and can be changed manually when the dialog pops up.
 						</description>
 					</parameter>
-					<parameter name="returnToEventList" type="boolean" default="true">
+					<parameter name="returnToEventList" type="boolean" default="false">
 						<description>
 						Whether to return to the event list after committing with
 						additional options or not.
@@ -254,6 +254,41 @@
 						values which may be changed if required.
 						</description>
 					</parameter>
+				</group>
+				<parameter name="originComments" type="list:string">
+					<description>
+					A list of origin comment profiles. These profiles will be
+					used to populate origin comments when committing an origin.
+					</description>
+				</parameter>
+				<group name="originComments">
+					<description>
+					The container for all origin comment profiles.
+					</description>
+					<struct name="OriginCommentProfile" link="olv.originComments">
+						<parameter name="id" type="string">
+							<description>
+							The id of the comment to be added, updated or removed.
+							</description>
+						</parameter>
+						<parameter name="label" type="string">
+							<description>
+							The label shown in the commit dialog.
+							</description>
+						</parameter>
+						<parameter name="options" type="list:string">
+							<description>
+							A list of options to select from. Actually the values
+							to populate the dropdown list with.
+							</description>
+						</parameter>
+						<parameter name="allowFreeText" type="boolean" default="false">
+							<description>
+							If free text is allowed in addition to the predefined
+							values.
+							</description>
+						</parameter>
+					</struct>
 				</group>
 				<group name="customCommits">
 					<description>
@@ -357,6 +392,41 @@
 						<parameter name="tooltip" type="boolean" default="false">
 							<description>
 							Add a summary of the actions to the button's tooltip.
+							</description>
+						</parameter>
+					</struct>
+				</group>
+				<parameter name="magnitudeComments" type="list:string">
+					<description>
+					A list of magnitude comment profiles. These profiles will be
+					used to populate magnitude comments when committing a magnitude.
+					</description>
+				</parameter>
+				<group name="magnitudeComments">
+					<description>
+					The container for all magnitude comment profiles.
+					</description>
+					<struct name="MagnitudeCommentProfile" link="olv.magnitudeComments">
+						<parameter name="id" type="string">
+							<description>
+							The id of the comment to be added, updated or removed.
+							</description>
+						</parameter>
+						<parameter name="label" type="string">
+							<description>
+							The label shown in the magnitude view.
+							</description>
+						</parameter>
+						<parameter name="options" type="list:string">
+							<description>
+							A list of options to select from. Actually the values
+							to populate the dropdown list with.
+							</description>
+						</parameter>
+						<parameter name="allowFreeText" type="boolean" default="false">
+							<description>
+							If free text is allowed in addition to the predefined
+							values.
 							</description>
 						</parameter>
 					</struct>

@@ -1,4 +1,4 @@
-/***************************************************************************
+﻿/***************************************************************************
  * Copyright (C) GFZ Potsdam                                               *
  * All rights reserved.                                                    *
  *                                                                         *
@@ -14,6 +14,7 @@
 
 #include <seiscomp/client/application.h>
 #include <seiscomp/io/archive/xmlarchive.h>
+#include <seiscomp/geo/boundingbox.h>
 
 #include <iostream>
 #include <iomanip>
@@ -45,48 +46,92 @@ class InventoryExtractor : public Client::Application {
 			setMessagingEnabled(false);
 			setDatabaseEnabled(false, false);
 			setLoggingToStdErr(true);
-			_remove = false;
 		}
 
 
-		void createCommandLineDescription() {
+		void createCommandLineDescription() override {
 			Client::Application::createCommandLineDescription();
 			commandline().addGroup("Extract");
 			commandline().addOption("Extract", "chans",
 			                        "A comma separated list of channel id's to "
-			                        "extract which can contain wildcards.",
+			                        "extract which can contain wildcards. "
+			                        "Default: *.*.*.* meaning all streams.",
 			                        &_chanIDs);
+			commandline().addOption("Extract", "region,r",
+			                        "Filter streams by geographic region given as "
+			                        "\"South,East,North,West\". Region is "
+			                        "unused by default.", &_region);
 			commandline().addOption("Extract", "rm",
-			                        "Removes the given channels instead of "
+			                        "Remove the given channels instead of "
 			                        "extracting them.");
-			commandline().addOption("Extract", "formatted,f", "Enables formatted XML output");
+			commandline().addOption("Extract", "formatted,f", "Enable formatted XML output.");
 		}
 
 
-		bool validateParameters() {
-			if ( !Client::Application::validateParameters() ) return false;
+		bool validateParameters() override {
+			if ( !Client::Application::validateParameters() ) {
+				return false;
+			}
 			_remove = commandline().hasOption("rm");
 			return true;
 		}
 
+		void printUsage() const override {
+			cout << "Usage:"  << endl
+			     << "  " << name() << " [OPTIONS] [input=stdin] [output=stdout]"
+			     << endl << endl
+			     << "Extract or remove streams from inventory." << endl;
 
-		void printUsage() const {
-			cout << "Usage: " << name() << " [OPTIONS] [input=stdin] [output=stdout]" << endl;
 			Client::Application::printUsage();
+
+			cout << "Examples:" << endl;
+			cout << "Extract inventory for entire GR network" << endl
+			     << "  " << name() << " -f --chans GR.*.*.* inventory_all.xml > inventory_GR.xml"
+			     << endl << endl;
+			cout << "Extract inventory for all stations within the given region" << endl
+			     << "  " << name() << " -f -r -10,0,50,15 inventory_all.xml > inventory_GR.xml"
+			     << endl << endl;
+			cout << "Remove inventory for entire GR network" << endl
+			     << "  " << name() << " -f --rm --chans GR.*.*.* inventory_all.xml > inventory_others.xml"
+			     << endl << endl;
 		}
 
 
-		bool run() {
+		bool run() override {
 			vector<string> chanIDs;
 			Core::split(chanIDs, _chanIDs.c_str(), ",");
+
+			if ( !_region.empty() ) {
+				vector<string> region;
+				Core::split(region, _region.c_str(), ",");
+				if ( region.size() != 4 ) {
+					cerr << "Region: expected 4 values, got " << int(region.size()) << " " << _region
+					     << endl;
+					return false;
+				}
+
+				Core::fromString(_bBox.south, region[0]);
+				Core::fromString(_bBox.west, region[1]);
+				Core::fromString(_bBox.north, region[2]);
+				Core::fromString(_bBox.east, region[3]);
+				_bBox.normalize();
+			}
+
 
 			vector<string> opts = commandline().unrecognizedOptions();
 			string input("-"), output("-");
 
-			if ( opts.size() > 0 )
+			if ( opts.empty() ) {
+				cerr << "Reading inventory from stdin. Use Ctrl + C to interrupt."
+				     << endl;
+			}
+			else {
 				input = opts[0];
-			if ( opts.size() > 1 )
+			}
+
+			if ( opts.size() > 1 ) {
 				output = opts[1];
+			}
 
 			DataModel::InventoryPtr inv;
 
@@ -97,7 +142,7 @@ class InventoryExtractor : public Client::Application {
 			}
 
 			ar >> inv;
-			if ( inv == NULL ) {
+			if ( !inv ) {
 				cerr << "No inventory found in " << input << endl;
 				return false;
 			}
@@ -119,6 +164,18 @@ class InventoryExtractor : public Client::Application {
 						DataModel::SensorLocation *loc = sta->sensorLocation(l);
 						string id2 = id1 + "." + loc->code();
 
+						// check coordinate of sensor location
+						if ( !_bBox.isEmpty() ) {
+							Geo::GeoCoordinate coord(loc->latitude(), loc->longitude());
+							// ignore if
+							// _remove IS active AND location IS within OR
+							// _remove IS NOT active AND location is NOT within
+							if ( _remove == _bBox.contains(coord) ) {
+								sta->removeSensorLocation(l);
+								continue;
+							}
+						}
+
 						for ( size_t c = 0; c < loc->streamCount(); ) {
 							DataModel::Stream *cha = loc->stream(c);
 							string id3 = id2 + "." + cha->code();
@@ -129,39 +186,48 @@ class InventoryExtractor : public Client::Application {
 							}
 
 							// Keep track of used sensors and dataloggers
-							if ( !cha->sensor().empty() )
+							if ( !cha->sensor().empty() ) {
 								usedSensors.insert(cha->sensor());
+							}
 
-							if ( !cha->datalogger().empty() )
+							if ( !cha->datalogger().empty() ) {
 								usedDataloggers.insert(cha->datalogger());
+							}
 
 							++c;
 						}
 
-						if ( loc->streamCount() == 0 )
+						if ( loc->streamCount() == 0 ) {
 							sta->removeSensorLocation(l);
-						else
-							++l;
+							continue;
+						}
+
+						++l;
 					}
 
-					if ( sta->sensorLocationCount() == 0 )
+					if ( sta->sensorLocationCount() == 0 ) {
 						net->removeStation(s);
-					else
-						++s;
+						continue;
+					}
+
+					++s;
 				}
 
-				if ( net->stationCount() == 0 )
+				if ( net->stationCount() == 0 ) {
 					inv->removeNetwork(n);
-				else
-					++n;
+					continue;
+				}
+
+				++n;
 			}
 
 			set<string> usedResponses;
 
 			// Remove unused sensors
 			for ( size_t s = 0; s < inv->sensorCount(); ) {
-				if ( usedSensors.find(inv->sensor(s)->publicID()) == usedSensors.end() )
+				if ( usedSensors.find(inv->sensor(s)->publicID()) == usedSensors.end() ) {
 					inv->removeSensor(s);
+				}
 				else {
 					usedResponses.insert(inv->sensor(s)->response());
 					++s;
@@ -171,8 +237,9 @@ class InventoryExtractor : public Client::Application {
 			// Remove unused dataloggers
 			for ( size_t d = 0; d < inv->dataloggerCount(); ) {
 				DataModel::Datalogger *dl = inv->datalogger(d);
-				if ( usedDataloggers.find(dl->publicID()) == usedDataloggers.end() )
+				if ( usedDataloggers.find(dl->publicID()) == usedDataloggers.end() ) {
 					inv->removeDatalogger(d);
+				}
 				else {
 					for ( size_t i = 0; i < dl->decimationCount(); ++i ) {
 						DataModel::Decimation *deci = dl->decimation(i);
@@ -206,38 +273,47 @@ class InventoryExtractor : public Client::Application {
 
 			// Remove unused responses
 			for ( size_t i = 0; i < inv->responsePAZCount(); ) {
-				if ( usedResponses.find(inv->responsePAZ(i)->publicID()) == usedResponses.end() )
+				if ( usedResponses.find(inv->responsePAZ(i)->publicID()) == usedResponses.end() ) {
 					inv->removeResponsePAZ(i);
+				}
 				else
 					++i;
 			}
 
 			for ( size_t i = 0; i < inv->responsePolynomialCount(); ) {
-				if ( usedResponses.find(inv->responsePolynomial(i)->publicID()) == usedResponses.end() )
+				if ( usedResponses.find(inv->responsePolynomial(i)->publicID()) == usedResponses.end() ) {
 					inv->removeResponsePolynomial(i);
-				else
+				}
+				else {
 					++i;
+				}
 			}
 
 			for ( size_t i = 0; i < inv->responseFAPCount(); ) {
-				if ( usedResponses.find(inv->responseFAP(i)->publicID()) == usedResponses.end() )
+				if ( usedResponses.find(inv->responseFAP(i)->publicID()) == usedResponses.end() ) {
 					inv->removeResponseFAP(i);
-				else
+				}
+				else {
 					++i;
+				}
 			}
 
 			for ( size_t i = 0; i < inv->responseFIRCount(); ) {
-				if ( usedResponses.find(inv->responseFIR(i)->publicID()) == usedResponses.end() )
+				if ( usedResponses.find(inv->responseFIR(i)->publicID()) == usedResponses.end() ) {
 					inv->removeResponseFIR(i);
-				else
+				}
+				else {
 					++i;
+				}
 			}
 
 			for ( size_t i = 0; i < inv->responseIIRCount(); ) {
-				if ( usedResponses.find(inv->responseIIR(i)->publicID()) == usedResponses.end() )
+				if ( usedResponses.find(inv->responseIIR(i)->publicID()) == usedResponses.end() ) {
 					inv->removeResponseIIR(i);
-				else
+				}
+				else {
 					++i;
+				}
 			}
 
 			if ( !ar.create(output.c_str()) ) {
@@ -252,10 +328,11 @@ class InventoryExtractor : public Client::Application {
 			return true;
 		}
 
-
 	private:
-		string  _chanIDs;
-		bool    _remove;
+		string              _chanIDs{"*.*.*.*"};
+		bool                _remove{false};
+		string              _region;
+		Geo::GeoBoundingBox _bBox;
 };
 
 

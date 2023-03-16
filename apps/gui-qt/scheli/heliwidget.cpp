@@ -11,10 +11,14 @@
  * https://www.gnu.org/licenses/agpl-3.0.html.                             *
  ***************************************************************************/
 
+
+#define SEISCOMP_COMPONENT Helicorder
+
 #include "heliwidget.h"
 #include <seiscomp/core/genericrecord.h>
 #include <seiscomp/math/filter/butterworth.h>
 #include <seiscomp/gui/core/application.h>
+#include <seiscomp/gui/core/compat.h>
 #include <seiscomp/gui/core/utils.h>
 #include <seiscomp/logging/log.h>
 
@@ -365,7 +369,7 @@ void HeliCanvas::rebuildView() {
 
 int HeliCanvas::draw(QPainter &p, const QSize &size) {
 	int tmp = _labelMargin;
-	_labelMargin = p.fontMetrics().width("00:00-");
+	_labelMargin = QT_FM_WIDTH(p.fontMetrics(), "00:00-");
 	QSize oldSize = _size;
 
 	resize(p.fontMetrics(), size);
@@ -392,7 +396,11 @@ void HeliCanvas::save(QString streamID, QString headline, QString date,
 		printer = new QPrinter(QPrinter::HighResolution);
 		printer->setOutputFileName(filename);
 		printer->setResolution(dpi);
-		printer->setPageSize(QPrinter::A4);
+#if QT_VERSION >= 0x050300
+		printer->setPageSize(QPageSize(QPageSize::A4));
+#else
+	printer->setPageSize(QPrinter::A4);
+#endif
 		painter = new QPainter(printer);
 	}
 	else {
@@ -630,7 +638,7 @@ void HeliCanvas::render(QPainter &p) {
 			if ( k == 0 ) {
 				QString str = formatAnnotation(cpos);
 
-				int tw = p.fontMetrics().width(str);
+				int tw = QT_FM_WIDTH(p.fontMetrics(), str);
 				p.drawText(_labelMargin + x-tw/2, startY, tw, h,
 				           Qt::AlignHCenter | Qt::AlignBottom, str);
 			}
@@ -689,7 +697,7 @@ void HeliCanvas::resize(const QFontMetrics &fm, const QSize &size) {
 	_drx[0] = spacings[imax-1].major;
 	_drx[1] = spacings[imax-1].minor;
 
-	int minDistance = fm.width("  XXXX-XX-XX.X  ");
+	int minDistance = QT_FM_WIDTH(fm, "  XXXX-XX-XX.X  ");
 	unsigned int i;
 	for ( i = 0; i < imax; ++i ) {
 		if ( spacings[i].major*scale >= minDistance ) {
@@ -755,7 +763,7 @@ QString HeliCanvas::formatAnnotation(const double pos){
 
 HeliWidget::HeliWidget(QWidget *parent, Qt::WindowFlags f)
 : QWidget(parent, f) {
-	_canvas.setLabelMargin(fontMetrics().width("00:00") + 6);
+	_canvas.setLabelMargin(QT_FM_WIDTH(fontMetrics(), "00:00") + 6);
 }
 
 

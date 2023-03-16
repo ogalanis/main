@@ -45,6 +45,8 @@
 #include <seiscomp/math/filter.h>
 #include <seiscomp/math/conversions.h>
 
+#include <cmath>
+
 #include "types.h"
 #include "infowidget.h"
 
@@ -141,7 +143,7 @@ void addEventWidgetRowData(EventTableWidget::RowData& rowData,
 	QString longitudeValue = QString("%1").arg((longitude <= 0) ? longitude * (-1.0) : longitude);
 	QString longitudeOrientation = QString("%1").arg((longitude <= 0) ? "W" : "E");
 
-	QString depth = QString("%1 km").arg(static_cast<int> (Math::round(origin->depth())));
+	QString depth = QString("%1 km").arg(static_cast<int>(round(origin->depth())));
 
 	rowData[EventTableWidget::EVENT_ID]     = eventId;
 	rowData[EventTableWidget::ORIGIN_TIME]  = originTime;
@@ -787,6 +789,11 @@ void MvMainWindow::setupStandardUi() {
 
 	connect(&_mapUpdateTimer, SIGNAL(timeout()), this, SLOT(updateMap()));
 
+	if ( SCApp->isMessagingEnabled() || SCApp->isDatabaseEnabled() ) {
+		_ui.menuSettings->addAction(_actionShowSettings);
+	}
+
+	_ui.menuView->addAction(_actionToggleFullScreen);
 	_mapUpdateTimer.start(_mapUpdateInterval);
 
 	_eventModeControls[DataModel::EEvaluationModeQuantity] = _ui.actionEventsModeUnset;
@@ -944,7 +951,7 @@ bool MvMainWindow::handleMapContextMenu(QContextMenuEvent* contextMenuEvent) {
 QAction* MvMainWindow::createAndConfigureContextMenuAction(const QString &title, Gui::Map::Symbol *mapSymbol) {
 	QAction* action = new QAction(title, NULL);
 
-	QVariant variant = qVariantFromValue(static_cast<void*>(mapSymbol));
+	QVariant variant = QVariant::fromValue(static_cast<void*>(mapSymbol));
 	action->setData(variant);
 
 	connect(action, SIGNAL(triggered()), this, SLOT(showInfoWidget()));
@@ -1184,7 +1191,11 @@ bool MvMainWindow::readStationsFromDataBase() {
 			if ( it == stations.end() ) continue;
 
 			it->second.stationRef = station;
-			it->second.stationSymbolRef = new MvStationSymbol(lat, lon, _annotationLayer->annotations()->add("TEST"));
+			it->second.stationSymbolRef = new MvStationSymbol(
+				_mapWidget->canvas().symbolCollection(),
+				lat, lon,
+				_annotationLayer->annotations()->add("")
+			);
 			it->second.stationSymbolRef->setType(StationSymbolType);
 			it->second.stationSymbolRef->setID(it->second.id);
 			it->second.stationSymbolRef->setNetworkCode(station->network()->code());

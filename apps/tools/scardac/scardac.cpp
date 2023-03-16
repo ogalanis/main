@@ -11,6 +11,7 @@
  * https://www.gnu.org/licenses/agpl-3.0.html.                             *
  ***************************************************************************/
 
+
 #define SEISCOMP_COMPONENT SCARDAC
 
 #define MAX_THREADS 1000
@@ -31,6 +32,7 @@
 #include <seiscomp/logging/log.h>
 
 #include <ctime>
+#include <functional>
 #include <vector>
 
 
@@ -707,6 +709,27 @@ SCARDAC::~SCARDAC() {
 
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+void SCARDAC::printUsage() const {
+cout << "Usage:"  << endl << "  scardac [options]" << endl << endl
+     << "Scan data archives and collect availability information from records."
+     << endl;
+
+Seiscomp::Client::Application::printUsage();
+
+cout << "Examples:" << endl;
+cout << "Scan the configured archive, write information to the default SeisComP database" << endl;
+cout << "scardac -d localhost -a $SEISCOMP_ROOT/var/lib/archive"
+     << endl << endl;
+cout << "Scan a specific archive at /archive, write information to the default SeisComP database" << endl;
+cout << "scardac -d localhost -a /archive"
+	 << endl << endl;
+}
+// <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+
+
+
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 void SCARDAC::createCommandLineDescription() {
 	commandline().addGroup("Collector");
 	commandline().addOption("Collector", "archive,a",
@@ -891,7 +914,7 @@ bool SCARDAC::run() {
 	// worker instance.
 	SEISCOMP_INFO("creating %i worker threads", _threads);
 	for ( int i = 1; i <= _threads; ++i ) {
-		_worker.push_back(new boost::thread(boost::bind(
+		_worker.push_back(new thread(bind(
 		        &SCARDAC::processExtents, this, i)));
 	}
 

@@ -8,9 +8,10 @@ possible server-side filters should be preferred to reduce both the network
 bandwidth consumption as well as the CPU and memory utilization on the local
 machine.
 
+
 .. _ql2sc_event_filter:
 
-Server-side event filter
+Server-Side Event Filter
 ========================
 
 QuakeLink provides a filter syntax similar to SQL-WHERE clauses which may be
@@ -19,11 +20,15 @@ used to filter interesting events on the server side:
 .. code-block:: none
 
    clause    := condition[ AND|OR [(]clause[)]]
-   condition := MAG|DEPTH|LAT|LON|PHASES|OTIME|UPDATED [op float|time]|[IS [NOT] NULL]
-   op        := =|&gt;|&gt;=|&lt;|&lt;=|eq|gt|ge|lt|ge
+   condition := MAG|DEPTH|LAT|LON|PHASES|DIST(lat,lon) op {float} |
+                DIST(lat,lon) IN [{float}, {float}] |
+                UPDATED|OTIME op time |
+                AGENCY|AUTHOR|STATUS|ESTATUS|EMODE|TYPE|REGION|MAG_T op 'string' |
+                MAG|DEPTH|LAT|LON|PHASES|OTIME|UPDATED IS [NOT] NULL
+   op        := =|!=|>|>=|<|<=|eq|gt|ge|lt|ge
    time      := %Y,%m,%d[,%H,%M,%S,%f]
 
-E.g. the following filter string would select only those events with a minimum
+E.g., the following filter string would select only those events with a minimum
 magnitude of 6, detected by at least 10 stations and which are shallower than
 100km:
 
@@ -31,9 +36,17 @@ magnitude of 6, detected by at least 10 stations and which are shallower than
 
    MAG >= 6.0 AND PHASES >= 10 AND DEPTH < 100
 
+.. note::
+
+   The supported filter commands depend on the specific QuakeLink version. To
+   list all available options you may connect to the server, e.g., using
+   `telnet localhost 18010`, and request the help page of the `SELECT` command
+   using `help select`.
+
+
 .. _ql2sc_object_filter:
 
-Server-side object filter
+Server-Side Object Filter
 =========================
 
 QuakeLink provides a coarse object filter for the most relevant SeisComP objects:
@@ -49,9 +62,10 @@ staMts       include moment tensor station contributions and phase settings
 preferred    include only preferred origin and magnitude information
 ============ ==============================================================
 
+
 .. _routing:
 
-Local object filter and routing
+Local Object Filter and Routing
 ===============================
 
 Subsequent to the server-side filters a routing table defines which objects to
@@ -59,13 +73,15 @@ import and to which message group to send them. Depending on the |scname| module
 listening to the specified message groups an object may be further processed.
 Typically no modules (other than :ref:`scmaster`) is connected to the
 ``IMPORT_GROUP`` so that objects sent to this group are just stored to the
-database. If an object should be discarded the special group identifier ``NULL``
+database. If an object should be discarded, the special group identifier ``NULL``
 may be used.
 
 The routing table is defined as a comma-separated list of
 ``object name:group name`` pairs. Also the routing rules are inherited
-recursively within the SeisComP object tree. If no explicit rule exists for an object
-the routing of its parent is evaluated up to the ``EventParameters`` root node.
+recursively within the SeisComP object tree. If no explicit rule exists for an
+object, the routing of its parent is evaluated up to the ``EventParameters``
+root node.
+
 
 Examples
 --------
@@ -90,6 +106,7 @@ Sends origins and it's children arrival, origin uncertainty to the ``LOCATION``
 group but the magnitude children to the ``MAGNITUDE`` group. Skips picks,
 amplitudes, focal mechanisms and events.
 
+
 Default routing table
 ---------------------
 
@@ -104,7 +121,7 @@ By default we route:
 * Origins (including its StationMagnitude and Magnitude children) to the
   ``LOCATION`` to allow event association.
 * FocalMechanisms to the ``FOCMECH`` group to trigger processing by specialized
-  applications, e.g. graphical user interfaces for strong motion analysis or
+  applications, e.g., graphical user interfaces for strong motion analysis or
   tsunami risk assessment.
 
 We don't route events at all. With the help of :ref:`scevent` locations are
@@ -120,15 +137,12 @@ second one the Magnitude. The Origin message immediately triggers magnitude
 calculation, potentially for a magnitude type which is received with the second
 message.
 
-The default routing table is set to:
+The default routing table is set as given in :confval:`host.$name.routingTable`.
 
-.. code-block:: none
-
-   Pick:IMPORT_GROUP,Amplitude:IMPORT_GROUP,FocalMechanism:FOCMECH,Origin:LOCATION
 
 .. _agency_filter:
 
-Agency list filter
+Agency List Filter
 ==================
 
 In addition to the local object filter the user may choose to accept only those
@@ -138,14 +152,14 @@ defined in the ``processing.whitelist.agencies`` or
 ``creationInfo.agencyID`` of amplitudes, arrivals, comments, events, focal
 mechanisms, magnitudes, moment tensors, origins, picks and station magnitudes is
 evaluated. Objects with unmatched or unset agency information are filtered out.
-If objects with unset agency id should match then empty string ``""`` has to be
+If objects with unset agency ID should match, then empty string ``""`` has to be
 added to the white list.
 
 The agency filter is applied on remote as well as local objects. In this way
 remote objects may be excluded from import and local objects my be protected
 from overriding or removing. Also the filter is applied recursively. If parent
-object (e.g. an origin) is filtered out all of its children (e.g. magnitudes)
-are also skipped even if they carry a different agency id.
+object (e.g., an origin) is filtered out, all of its children (e.g., magnitudes)
+are also skipped even if they carry a different agency ID.
 
 .. note::
 
@@ -155,7 +169,7 @@ are also skipped even if they carry a different agency id.
 
 .. _publicID_filter:
 
-PublicID prefix filter
+PublicID Prefix Filter
 ======================
 
 In addition to the :ref:`agency filter<agency_filter>` incoming or local objects
@@ -192,12 +206,12 @@ The ``ADD`` and ``REMOVE`` operation always generates notifies of the same type
 for all children of the current object. ``ADD`` notifiers are collected top-down,
 ``REMOVE`` notifiers are collected bottom-up.
 
-Because the order of child objects is arbitrary, e.g. the arrivals of an origin,
+Because the order of child objects is arbitrary, e.g., the arrivals of an origin,
 each object on the remote side has to be found in the set of local objects. For
-public objects (e.g. origins, magnitudes, magnitudes..), the ``publicID`` property
-is used for comparison. All other objects are compared by looking at their index
-properties. For e.g. arrivals this is the ``pickID`` property, for comments the
-``id`` property.
+public objects (e.g., origins, magnitudes, magnitudes..), the ``publicID``
+property is used for comparison. All other objects are compared by looking at
+their index properties. For e.g., arrivals this is the ``pickID`` property, for
+comments the ``id`` property.
 
 Ones all notifiers are collected they are send to the local messaging system.
 For performance reasons and because of the processing logic of listening |scname|
@@ -217,14 +231,14 @@ limit is reached.
    locations based on an incomplete dataset.
 
 
-Event attributes
+Event Attributes
 ================
 
 It might be desirable to synchronize event attributes set at the source with
 the local system. In particular the event type, the type uncertainty, event
 descriptions and comments might be of interest. Because it is not advisable
 to route events and let :ref:`scevent` associate imported origins it can
-happen that the imported event id is different from the event id of the local
+happen that the imported event ID is different from the event ID of the local
 system. The input host configuration parameter :confval:`syncEventAttributes`
 controls that behaviour. It is set to true by default which means that imported
 event attributes are going to be imported as well. ql2sc does not update
@@ -232,13 +246,14 @@ directly the attributes but commandates scevent in as many cases as possible
 to do so. To find the matching local event it takes the first occurrence which
 has associated the currently imported preferred origin.
 
+
 Limitations
 -----------
 
 There are limitations to this process to avoid infinite loops when cross
 connecting two systems. Prior to sending the commands to scevent to change a
 particular attribute ql2sc checks if that attribute has been set already by
-another module (via JournalEntry database table). If not then ql2sc is allowed
+another module (via JournalEntry database table). If not, then ql2sc is allowed
 to request an attribute change otherwise not. To illustrate the issue take the
 following example:
 
@@ -268,14 +283,14 @@ Caveats
 
 Specific combinations of remote and local object filters may result in the loss
 of data. If for instance origins are imported from system ``A`` to ``B`` and
-additional magnitudes for the received origins are calculated on ``B`` care must
+additional magnitudes for the received origins are calculated on ``B``, care must
 be taken. Without protection a new event update containing the same origin will
 ``REMOVE`` all newly calculated magnitudes on ``B`` since they are not included
 in the magnitude set sent by ``A``.
 
 To avoid losing these local magnitudes one may decide to block magnitudes from
 import by routing them to ``NULL``. If magnitudes from ``A`` and from ``B``
-should be available an :ref:`agency filter<agency_filter>` or
+should be available, an :ref:`agency filter<agency_filter>` or
 :ref:`publicID filter<publicID_filter>` may be defined.
 
 Make sure ``A`` and ``B`` use either distinct agency IDs or distinct publicID
